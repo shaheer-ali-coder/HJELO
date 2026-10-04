@@ -1,19 +1,32 @@
-import { useState, useEffect } from 'react';
-import { apiClient } from '../services/api';
+import { useState } from 'react';
+import apiClient from '../services/api';
 
-interface WalletAnalysis {
+export interface WalletAnalysis {
   wallet: string;
-  firstObserved: string;
-  activity: string;
-  coverage: string;
-  pnl: {
-    realized: string;
-    unrealized: string;
-    total: string;
-    volume: string;
+  ownershipVerified?: boolean;
+  professionalHistory?: any;
+  walletActivity?: any;
+  trading?: {
+    realizedPnL?: number | string;
+    unrealizedPnL?: number | string;
+    tradingVolume?: number | string;
+    profitableTradesPercent?: number;
+    coveragePercent?: number;
+    status?: string;
+    excluded?: string[];
   };
-  riskSignals: any[];
-  overallRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'INCONCLUSIVE';
+  risk?: {
+    level?: string;
+    score?: number | null;
+    signals?: any[];
+    methodology?: string;
+  };
+  reliability?: {
+    score?: number | null;
+    label?: string;
+    explanation?: string;
+  };
+  [key: string]: any;
 }
 
 export function useWalletAnalysis(walletAddress: string | undefined) {
@@ -30,24 +43,9 @@ export function useWalletAnalysis(walletAddress: string | undefined) {
     try {
       setLoading(true);
       setError(null);
+      // Server returns full profile object with wallet, trading, risk, reliability, etc.
       const profileData = await apiClient.getWalletProfile(walletAddress);
-      const riskData = await apiClient.getWalletRisk(walletAddress);
-      const tradingData = await apiClient.getWalletTrading(walletAddress);
-
-      setAnalysis({
-        wallet: walletAddress,
-        firstObserved: profileData.data?.firstObserved || 'N/A',
-        activity: profileData.data?.activity || 'Unknown',
-        coverage: profileData.data?.coverage || '0%',
-        pnl: tradingData.data?.pnl || {
-          realized: 'N/A',
-          unrealized: 'N/A',
-          total: 'N/A',
-          volume: 'N/A',
-        },
-        riskSignals: riskData.data?.signals || [],
-        overallRisk: riskData.data?.overallRisk || 'INCONCLUSIVE',
-      });
+      setAnalysis(profileData);
     } catch (err: any) {
       setError(err.message);
       setAnalysis(null);

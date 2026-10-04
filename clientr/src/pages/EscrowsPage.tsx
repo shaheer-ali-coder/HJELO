@@ -1,66 +1,49 @@
-import { alerts, overviewStats } from '../data/mockData';
+import { Link } from 'react-router-dom';
+import { useEscrows } from '../hooks/useEscrows';
 
-export default function DashboardPage() {
+export default function EscrowsPage() {
+  const { escrows, loading, error } = useEscrows();
+
   return (
     <div className="page-stack">
-      <section className="two-col">
-        <div className="panel">
-          <p className="eyebrow">Wallet / profile</p>
-          <h1>Dashboard</h1>
-          <div className="profile-header">
-            <div className="avatar">JB</div>
-            <div>
-              <strong>Jane Builder</strong>
-              <div className="muted">7xK...9ab • Verified</div>
-            </div>
+      <section className="panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <p className="eyebrow">Escrow list</p>
+            <h1>Escrows</h1>
           </div>
+          <Link to="/escrows/new" className="primary-button">Create escrow</Link>
         </div>
 
-        <div className="panel">
-          <p className="eyebrow">Quick actions</p>
-          <div className="role-grid">
-            <button className="primary-button">Create escrow</button>
-            <button className="secondary-button">Analyze wallet</button>
-            <button className="secondary-button">Submit evidence</button>
+        {error && <p className="muted" style={{ color: 'red' }}>Error: {error}</p>}
+        {loading && <p className="muted">Loading escrows...</p>}
+        {!loading && escrows.length === 0 && <p>No escrows found.</p>}
+        {!loading && escrows.length > 0 && (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Contract</th>
+                  <th>Status</th>
+                  <th>Amount</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {escrows.map((item: any) => (
+                  <tr key={item.address || item.id}>
+                    <td>{item.title || item.description || 'Untitled'}</td>
+                    <td><span className="status-badge">{item.status || 'Active'}</span></td>
+                    <td>{item.totalAmount ? `${item.totalAmount} SOL` : item.amount ? `${item.amount} SOL` : '—'}</td>
+                    <td>
+                      <Link to={`/escrow/${item.address || item.id}`} className="secondary-button">View</Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      </section>
-
-      <section className="stat-grid">
-        {overviewStats.map((item) => (
-          <div key={item.label} className="metric-card large">
-            <small>{item.label}</small>
-            <strong>{item.value}</strong>
-            <span>{item.delta}</span>
-          </div>
-        ))}
-      </section>
-
-      <section className="two-col">
-        <div className="panel">
-          <h2>Pending actions</h2>
-          <ul className="list-stack">
-            {alerts.map((alert) => (
-              <li key={alert}>{alert}</li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="panel">
-          <h2>Wallet risk snapshot</h2>
-          <div className="risk-row">
-            <span>Overall</span>
-            <strong className="success">LOW</strong>
-          </div>
-          <div className="risk-row">
-            <span>Coverage</span>
-            <strong>87%</strong>
-          </div>
-          <div className="risk-row">
-            <span>Estimated P/L</span>
-            <strong>+14.7 SOL</strong>
-          </div>
-        </div>
+        )}
       </section>
     </div>
   );

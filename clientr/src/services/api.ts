@@ -1,10 +1,10 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
+export interface ApiError {
+  code: string;
+  message: string;
+  statusCode?: number;
+  details?: Record<string, any>;
 }
 
 class ApiClient {
@@ -34,6 +34,7 @@ class ApiClient {
   clearToken() {
     this.token = null;
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('user_wallet');
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -51,143 +52,229 @@ class ApiClient {
       throw new Error(error.message || error.error || `HTTP ${response.status}`);
     }
 
-    return response.json();
+    return response.json() as Promise<T>;
   }
 
-  // AUTH
-  async signMessage(message: string, signature: string, walletAddress: string) {
-    return this.request('/auth/verify-signature', {
+  // ====== AUTH ======
+  async signup(email: string, password: string, name: string) {
+    return this.request('/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ message, signature, walletAddress }),
+      body: JSON.stringify({ email, password, name }),
     });
   }
 
-  async getChallenge(walletAddress: string) {
-    return this.request('/auth/challenge', {
+  async login(email: string, password: string) {
+    return this.request('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ walletAddress }),
+      body: JSON.stringify({ email, password }),
     });
   }
 
-  // PROFILE
-  async getProfile(walletAddress: string) {
-    return this.request(`/profile/${walletAddress}`);
+  // ====== PROFILE ======
+  async getProfile() {
+    return this.request('/profile');
   }
 
-  async updateProfile(walletAddress: string, data: any) {
-    return this.request(`/profile/${walletAddress}`, {
-      method: 'PUT',
+  async updateProfile(data: Record<string, any>) {
+    return this.request('/profile', {
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
-  async getProfileActivity(walletAddress: string) {
-    return this.request(`/profile/${walletAddress}/activity`);
+  async verifyWallet(walletAddress: string, message: string, signature: string) {
+    return this.request('/profile/wallet/verify', {
+      method: 'POST',
+      body: JSON.stringify({ walletAddress, message, signature }),
+    });
   }
 
-  // ESCROWS
-  async listEscrows(filters?: any) {
-    const query = filters ? `?${new URLSearchParams(filters).toString()}` : '';
-    return this.request(`/escrow${query}`);
+  // ====== ESCROWS ======
+  async listEscrows() {
+    return this.request('/escrow');
   }
 
-  async getEscrow(escrowId: string) {
-    return this.request(`/escrow/${escrowId}`);
+  async getEscrow(address: string) {
+    return this.request(`/escrow/${address}`);
   }
 
-  async createEscrow(data: any) {
+  async createEscrow(data: Record<string, any>) {
     return this.request('/escrow', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async createMilestone(escrowId: string, data: any) {
-    return this.request(`/escrow/${escrowId}/milestones`, {
+  async createMilestone(address: string, data: Record<string, any>) {
+    return this.request(`/escrow/${address}/milestones`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async releaseMilestone(escrowId: string, milestoneIndex: number, data: any) {
-    return this.request(`/escrow/${escrowId}/milestones/${milestoneIndex}/release`, {
+  async releaseMilestone(address: string, index: number, data: Record<string, any> = {}) {
+    return this.request(`/escrow/${address}/milestones/${index}/release`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async cancelEscrow(escrowId: string) {
-    return this.request(`/escrow/${escrowId}/cancel`, {
+  async cancelEscrow(address: string) {
+    return this.request(`/escrow/${address}/cancel`, {
       method: 'POST',
     });
   }
 
-  async syncEscrow(escrowId: string, txSignature: string) {
-    return this.request(`/escrow/${escrowId}/sync`, {
+  async syncEscrow(address: string, signature: string) {
+    return this.request(`/escrow/${address}/sync`, {
       method: 'POST',
-      body: JSON.stringify({ transactionSignature: txSignature }),
+      body: JSON.stringify({ signature }),
     });
   }
 
-  // WORK SUBMISSIONS
-  async submitWork(escrowId: string, milestoneIndex: number, data: any) {
-    return this.request(`/work-submissions`, {
-      method: 'POST',
-      body: JSON.stringify({
-        escrowId,
-        milestoneIndex,
-        ...data,
-      }),
-    });
-  }
-
-  async getWorkSubmission(submissionId: string) {
-    return this.request(`/work-submissions/${submissionId}`);
-  }
-
-  // EVALUATIONS
-  async getEvaluation(evaluationId: string) {
-    return this.request(`/evaluations/${evaluationId}`);
-  }
-
-  async submitEvaluationReview(evaluationId: string, data: any) {
-    return this.request(`/evaluations/${evaluationId}/review`, {
+  // ====== WORK SUBMISSIONS ======
+  async submitWork(data: Record<string, any>) {
+    return this.request('/work-submissions', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  // REPUTATION & WALLET ANALYSIS
-  async scanWallet(walletAddress: string) {
-    return this.request(`/reputation/wallet/${walletAddress}/scan`, {
+  async getWorkSubmission(escrowAddress: string, milestoneIndex: number) {
+    return this.request(`/work-submissions/${escrowAddress}/${milestoneIndex}`);
+  }
+
+  async evaluateWork(escrowAddress: string, milestoneIndex: number) {
+    return this.request(`/work-submissions/${escrowAddress}/${milestoneIndex}/evaluate`, {
       method: 'POST',
     });
   }
 
-  async getWalletProfile(walletAddress: string) {
-    return this.request(`/reputation/wallet/${walletAddress}/profile`);
+  async rejectWork(escrowAddress: string, milestoneIndex: number, reason: string) {
+    return this.request(`/work-submissions/${escrowAddress}/${milestoneIndex}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
   }
 
-  async getWalletActivity(walletAddress: string) {
-    return this.request(`/reputation/wallet/${walletAddress}/activity`);
+  // ====== EVALUATIONS ======
+  async submitEvidence(data: Record<string, any>) {
+    return this.request('/evaluations/evidence', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
-  async getWalletTrading(walletAddress: string) {
-    return this.request(`/reputation/wallet/${walletAddress}/trading`);
+  async getEvaluation(id: string) {
+    return this.request(`/evaluations/${id}`);
   }
 
-  async getWalletRisk(walletAddress: string) {
-    return this.request(`/reputation/wallet/${walletAddress}/risk`);
+  async getEvaluationsByMilestone(milestoneId: string) {
+    return this.request(`/evaluations/milestone/${milestoneId}`);
   }
 
-  async getWalletEvents(walletAddress: string) {
-    return this.request(`/reputation/wallet/${walletAddress}/events`);
+  async aiEvaluate(data: Record<string, any>) {
+    return this.request('/evaluations/ai-evaluate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
-  async getWalletEvidence(walletAddress: string) {
-    return this.request(`/reputation/wallet/${walletAddress}/evidence`);
+  // ====== DISPUTES ======
+  async createDispute(data: Record<string, any>) {
+    return this.request('/evaluations/disputes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getDispute(id: string) {
+    return this.request(`/evaluations/disputes/${id}`);
+  }
+
+  async getDisputesByMilestone(milestoneId: string) {
+    return this.request(`/evaluations/disputes/milestone/${milestoneId}`);
+  }
+
+  async resolveDispute(id: string, data: Record<string, any>) {
+    return this.request(`/evaluations/disputes/${id}/resolve`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ====== NOTIFICATIONS ======
+  async getNotifications() {
+    return this.request('/evaluations/notifications');
+  }
+
+  async getUnreadCount() {
+    return this.request('/evaluations/notifications/unread/count');
+  }
+
+  async markNotificationAsRead(id: string) {
+    return this.request(`/evaluations/notifications/${id}/read`, {
+      method: 'PATCH',
+    });
+  }
+
+  async deleteNotification(id: string) {
+    return this.request(`/evaluations/notifications/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ====== REPUTATION & WALLET ======
+  /**
+   * GET /reputation/wallet/:address/profile
+   * Returns combined wallet data with: wallet, ownershipVerified, professionalHistory, walletActivity, trading, risk, reliability
+   */
+  async getWalletProfile(address: string) {
+    return this.request(`/reputation/wallet/${address}/profile`);
+  }
+
+  /**
+   * POST /reputation/wallet/:address/scan
+   * Scans wallet and rebuilds reputation
+   */
+  async scanWallet(address: string) {
+    return this.request(`/reputation/wallet/${address}/scan`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * GET /reputation/wallet/:address/activity
+   * Returns wallet profile data (backend returns full profile object)
+   */
+  async getWalletActivity(address: string) {
+    return this.request(`/reputation/wallet/${address}/activity`);
+  }
+
+  /**
+   * GET /reputation/wallet/:address/trading
+   * Returns wallet profile data (backend returns full profile object)
+   */
+  async getWalletTrading(address: string) {
+    return this.request(`/reputation/wallet/${address}/trading`);
+  }
+
+  /**
+   * GET /reputation/wallet/:address/risk
+   * Returns wallet profile data (backend returns full profile object)
+   */
+  async getWalletRisk(address: string) {
+    return this.request(`/reputation/wallet/${address}/risk`);
+  }
+
+  /**
+   * GET /reputation/wallet/:address/evidence
+   * Returns on-chain events for the wallet
+   */
+  async getWalletEvidence(address: string) {
+    return this.request(`/reputation/wallet/${address}/evidence`);
   }
 }
 
 export const apiClient = new ApiClient(API_BASE);
-export type { ApiResponse };
+export default apiClient;

@@ -1,35 +1,71 @@
 import { useState, useEffect } from 'react';
+import apiClient from '../services/api';
 
-interface Notification {
+export interface Notification {
   id: string;
-  type: 'escrow' | 'evaluation' | 'payment' | 'dispute';
+  type: 'escrow' | 'evaluation' | 'payment' | 'dispute' | string;
   title: string;
   message: string;
   read: boolean;
   createdAt: string;
   actionUrl?: string;
+  [key: string]: any;
 }
 
 export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulated polling - replace with actual API call to /api/notifications
-    const loadNotifications = async () => {
+    const fetch = async () => {
       try {
-        // TODO: Replace with apiClient.getNotifications() once backend is ready
-        setLoading(false);
+        setLoading(true);
+        const [notifRes, countRes] = await Promise.all([
+          apiClient.getNotifications(),
+          apiClient.getUnreadCount(),
+        ]);
+        const notifs = Array.isArray(notifRes) ? notifRes : (notifRes.data || notifRes.notifications || []);
+        const count = countRes.unreadCount || 0;
+        setNotifications(notifs);
+        setUnreadCount(count);
+        setError(null);
       } catch (err: any) {
         setError(err.message);
+        setNotifications([]);
+        setUnreadCount(0);
+      } finally {
+        setLoading(false);
       }
     };
 
-    loadNotifications();
-    const interval = setInterval(loadNotifications, 30000); // Poll every 30s
-    return () => clearInterval(interval);
+    fetch();
   }, []);
 
-  return { notifications, loading, error };
+  const markAsRead = async (id: string) => {
+    try {
+      await apiClient.markNotificationAsRead(id);
+      // Update local state
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      );
+      if (unreadCount > 0) {
+        setUnreadCount(unreadCount - 1);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const deleteNotif = async (id: string) => {
+    try {
+      await apiClient.deleteNotification(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  return { notifications, unreadCount, loading, error, markAsRead, deleteNotif };
 }
